@@ -1,151 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BeatLight.js - Senter Musik</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #222;
-            color: white;
-            margin: 0;
-        }
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        #status {
-            font-size: 16px;
-            color: #ccc;
-            text-align: center;
-            padding: 0 20px;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background-color: #222;
+        color: white;
+        margin: 0;
+      }
+      button {
+        padding: 15px 30px;
+        font-size: 18px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-bottom: 20px;
+        transition: background-color 0.3s;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      #status {
+        font-size: 16px;
+        color: #ccc;
+        text-align: center;
+        padding: 0 20px;
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <h2>BeatLight.js</h2>
     <button id="tombolMulai">Mulai Senter Musik</button>
-    <div id="status">Tekan tombol di atas untuk memulai dan berikan izin akses kamera serta mikrofon.</div>
+    <div id="status">
+      Tekan tombol di atas untuk memulai dan berikan izin akses kamera serta
+      mikrofon.
+    </div>
 
     <script>
-        const tombolMulai = document.getElementById('tombolMulai');
-        const teksStatus = document.getElementById('status');
-        
-        let sedangBerjalan = false;
-        let jalurKamera = null;
-        let konteksAudio = null;
-        let IDAnimasi = null;
+      const tombolMulai = document.getElementById("tombolMulai");
+      const teksStatus = document.getElementById("status");
 
-        // BATAS KEKERASAN SUARA (Skala 0 sampai 255)
-        // Sesuaikan angka ini. Semakin kecil, senter semakin mudah menyala.
-        const BATAS_BASS = 150; 
+      let sedangBerjalan = false;
+      let jalurKamera = null;
+      let konteksAudio = null;
+      let IDAnimasi = null;
 
-        tombolMulai.addEventListener('click', async () => {
-            if (!sedangBerjalan) {
-                await mulaiAplikasi();
-            } else {
-                berhentikanAplikasi();
-            }
-        });
+      // --- PENYESUAIAN 1: Menurunkan batas ambang batas ---
+      // BATAS KEKERASAN SUARA (Skala 0 sampai 255).
+      // Kita turunkan dari 150 ke 30 agar jauh lebih sensitif.
+      // Kamu bisa mencoba-coba angka ini (misalnya 20 atau 40) nanti.
+      const BATAS_BASS = 30;
 
-        async function mulaiAplikasi() {
+      tombolMulai.addEventListener("click", async () => {
+        if (!sedangBerjalan) {
+          await mulaiAplikasi();
+        } else {
+          berhentikanAplikasi();
+        }
+      });
+
+      async function mulaiAplikasi() {
+        try {
+          teksStatus.innerText = "Meminta izin...";
+
+          // 1. Meminta izin Kamera Belakang (untuk mengakses senter)
+          const streamKamera = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+          });
+
+          // Mengambil jalur video pertama dari kamera
+          jalurKamera = streamKamera.getVideoTracks()[0];
+
+          // --- PENYESUAIAN 2: Menghapus pengecekan ketat senter ---
+          // Kita hapus blok pengecekan 'if (!kemampuanKamera.torch)' yang lama.
+          // Kita akan langsung mencoba menyalakan senter di fungsi cekSuara()
+          // dan menangkap error jika memang tidak didukung.
+
+          // 2. Meminta izin Mikrofon
+          const streamAudio = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+
+          // Membuat konteks audio untuk penganalisisan
+          konteksAudio = new (
+            window.AudioContext || window.webkitAudioContext
+          )();
+          const sumberAudio = konteksAudio.createMediaStreamSource(streamAudio);
+          const penganalisis = konteksAudio.createAnalyser();
+
+          penganalisis.fftSize = 256;
+          sumberAudio.connect(penganalisis);
+
+          // --- PENYESUAIAN 3: Menghapus koneksi suara ke speaker ---
+          // Kita hapus baris 'penganalisis.connect(konteksAudio.destination);'
+          // agar suara mikrofon tidak diputar kembali ke speaker (mencegah feedback).
+
+          const panjangData = penganalisis.frequencyBinCount;
+          const dataKekuatanSuara = new Uint8Array(panjangData);
+
+          sedangBerjalan = true;
+          tombolMulai.innerText = "Berhenti";
+          tombolMulai.style.backgroundColor = "#f44336"; // Ubah warna jadi merah
+          teksStatus.innerText = "Mendengarkan musik... Putar lagu yang keras!";
+
+          // 3. Fungsi berulang untuk mengecek suara secara terus-menerus
+          function cekSuara() {
+            if (!sedangBerjalan) return;
+
+            penganalisis.getByteFrequencyData(dataKekuatanSuara);
+
+            // Kita ambil sampel frekuensi suara nada rendah (bass) di indeks awal.
+            // Menggunakan indeks 1 atau 2 sering memberikan hasil beat yang lebih baik daripada 5.
+            let nilaiSuara = dataKekuatanSuara[1];
+
+            // Menyalakan atau mematikan senter berdasarkan kekuatan suara.
+            // Kita gunakan try-catch untuk menangkap error jika fitur senter gagal diterapkan.
             try {
-                teksStatus.innerText = "Meminta izin...";
-
-                // 1. Meminta izin Kamera Belakang (untuk mengakses senter)
-                const streamKamera = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }
-                });
-                
-                // Mengambil jalur video pertama dari kamera
-                jalurKamera = streamKamera.getVideoTracks()[0];
-                
-                // Mengecek apakah kamera tersebut memiliki fitur senter (torch)
-                const kemampuanKamera = jalurKamera.getCapabilities();
-                if (!kemampuanKamera.torch) {
-                    teksStatus.innerText = "Maaf, peramban atau HP ini tidak mendukung kontrol senter via web.";
-                    berhentikanAplikasi();
-                    return;
-                }
-
-                // 2. Meminta izin Mikrofon
-                const streamAudio = await navigator.mediaDevices.getUserMedia({ audio: true });
-                konteksAudio = new (window.AudioContext || window.webkitAudioContext)();
-                const sumberAudio = konteksAudio.createMediaStreamSource(streamAudio);
-                const penganalisis = konteksAudio.createAnalyser();
-                
-                penganalisis.fftSize = 256;
-                sumberAudio.connect(penganalisis);
-                
-                const panjangData = penganalisis.frequencyBinCount;
-                const dataKekuatanSuara = new Uint8Array(panjangData);
-
-                sedangBerjalan = true;
-                tombolMulai.innerText = "Berhenti";
-                tombolMulai.style.backgroundColor = "#f44336"; // Ubah warna jadi merah
-                teksStatus.innerText = "Mendengarkan musik... Putar lagu yang keras!";
-
-                // 3. Fungsi berulang untuk mengecek suara secara terus-menerus
-                function cekSuara() {
-                    if (!sedangBerjalan) return;
-
-                    penganalisis.getByteFrequencyData(dataKekuatanSuara);
-                    
-                    // Kita ambil suara nada rendah (bass) di indeks awal
-                    let nilaiSuara = dataKekuatanSuara[5]; 
-
-                    // Menyalakan atau mematikan senter berdasarkan kekuatan suara
-                    if (nilaiSuara > BATAS_BASS) {
-                        jalurKamera.applyConstraints({ advanced: [{ torch: true }] });
-                    } else {
-                        jalurKamera.applyConstraints({ advanced: [{ torch: false }] });
-                    }
-
-                    // Ulangi pengecekan secepat mungkin
-                    IDAnimasi = requestAnimationFrame(cekSuara);
-                }
-
-                cekSuara(); // Jalankan fungsi pengecekan
-
-            } catch (error) {
-                console.error("Terjadi kesalahan:", error);
-                teksStatus.innerText = "Gagal memulai. Pastikan kamu memberikan izin kamera dan mikrofon, serta menggunakan koneksi HTTPS.";
-            }
-        }
-
-        function berhentikanAplikasi() {
-            sedangBerjalan = false;
-            tombolMulai.innerText = "Mulai Senter Musik";
-            tombolMulai.style.backgroundColor = "#4CAF50"; // Kembalikan ke warna hijau
-            teksStatus.innerText = "Senter musik dihentikan.";
-
-            // Hentikan putaran pengecekan suara
-            if (IDAnimasi) cancelAnimationFrame(IDAnimasi);
-
-            // Matikan senter dan tutup kamera
-            if (jalurKamera) {
+              if (nilaiSuara > BATAS_BASS) {
+                jalurKamera.applyConstraints({ advanced: [{ torch: true }] });
+              } else {
                 jalurKamera.applyConstraints({ advanced: [{ torch: false }] });
-                jalurKamera.stop();
+              }
+            } catch (err) {
+              console.error("Gagal mengontrol senter:", err);
             }
 
-            // Tutup mikrofon
-            if (konteksAudio) {
-                konteksAudio.close();
-            }
+            // Ulangi pengecekan secepat mungkin (sekitar 60 kali per detik)
+            IDAnimasi = requestAnimationFrame(cekSuara);
+          }
+
+          cekSuara(); // Jalankan fungsi pengecekan
+        } catch (error) {
+          console.error("Terjadi kesalahan utama:", error);
+          teksStatus.innerText =
+            "Gagal memulai. Pastikan kamu memberikan izin kamera dan mikrofon, serta menggunakan koneksi HTTPS.";
         }
+      }
+
+      function berhentikanAplikasi() {
+        sedangBerjalan = false;
+        tombolMulai.innerText = "Mulai Senter Musik";
+        tombolMulai.style.backgroundColor = "#4CAF50"; // Kembalikan ke warna hijau
+        teksStatus.innerText = "Senter musik dihentikan.";
+
+        // Hentikan putaran pengecekan suara
+        if (IDAnimasi) cancelAnimationFrame(IDAnimasi);
+
+        // Matikan senter dan tutup kamera
+        if (jalurKamera) {
+          // Mencoba mematikan senter sebelum menutup kamera
+          try {
+            jalurKamera.applyConstraints({ advanced: [{ torch: false }] });
+          } catch (err) {}
+
+          jalurKamera.stop();
+        }
+
+        // Tutup mikrofon
+        if (konteksAudio) {
+          konteksAudio.close();
+        }
+      }
     </script>
-</body>
+  </body>
 </html>
