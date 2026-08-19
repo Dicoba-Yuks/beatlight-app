@@ -1,9 +1,11 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
+  <!-- Perubahan: Lang set ke en -->
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BeatLight.js - Senter Musik</title>
+    <!-- UI Change: Title -->
+    <title>BeatLight.js - Music Flashlight</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -44,26 +46,22 @@
         width: 80%;
         max-width: 400px;
       }
-
       .kontrol-container label {
         font-size: 16px;
         color: #ccc;
         margin-bottom: 15px;
       }
-
       .kontrol-grup {
         display: flex;
         align-items: center;
         width: 100%;
         justify-content: center;
-        gap: 10px; /* Jarak antara slider dan angka */
+        gap: 10px;
       }
-
       #sliderSuara {
-        flex-grow: 1; /* Slider akan melebar untuk mengisi ruang yang tersedia */
+        flex-grow: 1;
         cursor: pointer;
       }
-
       #angkaSuara {
         width: 60px;
         padding: 8px;
@@ -78,13 +76,17 @@
   </head>
   <body>
     <h2>BeatLight.js</h2>
-    <button id="tombolMulai">Mulai Senter Musik</button>
+    <!-- UI Change: Button Text -->
+    <button id="tombolMulai">Start Music Light</button>
+
+    <!-- UI Change: Instructions -->
     <div id="status">
-      Tekan tombol di atas untuk memulai dan berikan izin akses kamera serta
-      mikrofon.
+      Press the button to start. Please allow camera and microphone access.
     </div>
+
     <div class="kontrol-container">
-      <label for="sliderSuara">Batas kekerasan suara skala 0 - 255</label>
+      <!-- UI Change: Label -->
+      <label for="sliderSuara">Sound Sensitivity (0 - 255)</label>
       <div class="kontrol-grup">
         <input type="range" id="sliderSuara" min="0" max="255" value="10" />
         <input type="number" id="angkaSuara" min="0" max="255" value="10" />
@@ -94,7 +96,6 @@
     <script>
       const tombolMulai = document.getElementById("tombolMulai");
       const teksStatus = document.getElementById("status");
-
       const sliderSuara = document.getElementById("sliderSuara");
       const angkaSuara = document.getElementById("angkaSuara");
 
@@ -102,24 +103,14 @@
       let jalurKamera = null;
       let konteksAudio = null;
       let IDAnimasi = null;
+      let BATAS_BASS = parseInt(sliderSuara.value);
 
-      // --- PENYESUAIAN 1: Menurunkan batas ambang batas ---
-      // BATAS KEKERASAN SUARA (Skala 0 sampai 255).
-      // const BATAS_BASS = 50;
-
-      let BATAS_BASS = parseInt(sliderSuara.value); // Nilai awal diambil dari UI
-
-      // Fungsi untuk memperbarui nilai BATAS_BASS secara dinamis
       function perbaruiSensitivitas() {
-        BATAS_BASS = parseInt(this.value); // Ambil nilai dari kontrol yang diubah
-        sliderSuara.value = this.value; // Sinkronkan slider
-        angkaSuara.value = this.value; // Sinkronkan angka
-
-        // Opsional: Berikan umpan balik visual atau log
-        console.log("Sensitivitas diperbarui ke:", BATAS_BASS);
+        BATAS_BASS = parseInt(this.value);
+        sliderSuara.value = this.value;
+        angkaSuara.value = this.value;
       }
 
-      // Hubungkan event listener untuk slider dan input angka
       sliderSuara.addEventListener("input", perbaruiSensitivitas);
       angkaSuara.addEventListener("input", perbaruiSensitivitas);
 
@@ -133,27 +124,19 @@
 
       async function mulaiAplikasi() {
         try {
-          teksStatus.innerText = "Meminta izin...";
+          // JS UI Change: Status Loading
+          teksStatus.innerText = "Asking for permission...";
 
-          // 1. Meminta izin Kamera Belakang (untuk mengakses senter)
           const streamKamera = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: "environment" },
           });
 
-          // Mengambil jalur video pertama dari kamera
           jalurKamera = streamKamera.getVideoTracks()[0];
 
-          // --- PENYESUAIAN 2: Menghapus pengecekan ketat senter ---
-          // Kita hapus blok pengecekan 'if (!kemampuanKamera.torch)' yang lama.
-          // Kita akan langsung mencoba menyalakan senter di fungsi cekSuara()
-          // dan menangkap error jika memang tidak didukung.
-
-          // 2. Meminta izin Mikrofon
           const streamAudio = await navigator.mediaDevices.getUserMedia({
             audio: true,
           });
 
-          // Membuat konteks audio untuk penganalisisan
           konteksAudio = new (
             window.AudioContext || window.webkitAudioContext
           )();
@@ -163,30 +146,20 @@
           penganalisis.fftSize = 256;
           sumberAudio.connect(penganalisis);
 
-          // --- PENYESUAIAN 3: Menghapus koneksi suara ke speaker ---
-          // Kita hapus baris 'penganalisis.connect(konteksAudio.destination);'
-          // agar suara mikrofon tidak diputar kembali ke speaker (mencegah feedback).
-
           const panjangData = penganalisis.frequencyBinCount;
           const dataKekuatanSuara = new Uint8Array(panjangData);
 
           sedangBerjalan = true;
-          tombolMulai.innerText = "Berhenti";
-          tombolMulai.style.backgroundColor = "#f44336"; // Ubah warna jadi merah
-          teksStatus.innerText = "Mendengarkan musik... Putar lagu yang keras!";
+          // JS UI Change: Button Stop
+          tombolMulai.innerText = "Stop";
+          tombolMulai.style.backgroundColor = "#f44336";
+          // JS UI Change: Status Listening
+          teksStatus.innerText = "Listening to music... Play loud music!";
 
-          // 3. Fungsi berulang untuk mengecek suara secara terus-menerus
           function cekSuara() {
             if (!sedangBerjalan) return;
-
             penganalisis.getByteFrequencyData(dataKekuatanSuara);
-
-            // Kita ambil sampel frekuensi suara nada rendah (bass) di indeks awal.
-            // Menggunakan indeks 1 atau 2 sering memberikan hasil beat yang lebih baik daripada 5.
             let nilaiSuara = dataKekuatanSuara[1];
-
-            // Menyalakan atau mematikan senter berdasarkan kekuatan suara.
-            // Kita gunakan try-catch untuk menangkap error jika fitur senter gagal diterapkan.
             try {
               if (nilaiSuara > BATAS_BASS) {
                 jalurKamera.applyConstraints({ advanced: [{ torch: true }] });
@@ -194,41 +167,36 @@
                 jalurKamera.applyConstraints({ advanced: [{ torch: false }] });
               }
             } catch (err) {
-              console.error("Gagal mengontrol senter:", err);
+              console.error("Flashlight control failed:", err);
             }
-
-            // Ulangi pengecekan secepat mungkin (sekitar 60 kali per detik)
             IDAnimasi = requestAnimationFrame(cekSuara);
           }
-
-          cekSuara(); // Jalankan fungsi pengecekan
+          cekSuara();
         } catch (error) {
-          console.error("Terjadi kesalahan utama:", error);
+          console.error("Error:", error);
+          // JS UI Change: Error Message
           teksStatus.innerText =
-            "Gagal memulai. Pastikan kamu memberikan izin kamera dan mikrofon, serta menggunakan koneksi HTTPS.";
+            "Failed to start. Please check permissions and use HTTPS connection.";
         }
       }
 
       function berhentikanAplikasi() {
         sedangBerjalan = false;
-        tombolMulai.innerText = "Mulai Senter Musik";
-        tombolMulai.style.backgroundColor = "#4CAF50"; // Kembalikan ke warna hijau
-        teksStatus.innerText = "Senter musik dihentikan.";
+        // JS UI Change: Button Reset
+        tombolMulai.innerText = "Start Music Light";
+        tombolMulai.style.backgroundColor = "#4CAF50";
+        // JS UI Change: Status Stopped
+        teksStatus.innerText = "Music light stopped.";
 
-        // Hentikan putaran pengecekan suara
         if (IDAnimasi) cancelAnimationFrame(IDAnimasi);
 
-        // Matikan senter dan tutup kamera
         if (jalurKamera) {
-          // Mencoba mematikan senter sebelum menutup kamera
           try {
             jalurKamera.applyConstraints({ advanced: [{ torch: false }] });
           } catch (err) {}
-
           jalurKamera.stop();
         }
 
-        // Tutup mikrofon
         if (konteksAudio) {
           konteksAudio.close();
         }
