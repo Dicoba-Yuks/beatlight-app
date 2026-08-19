@@ -36,6 +36,44 @@
         text-align: center;
         padding: 0 20px;
       }
+      .kontrol-container {
+        margin-top: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 80%;
+        max-width: 400px;
+      }
+
+      .kontrol-container label {
+        font-size: 16px;
+        color: #ccc;
+        margin-bottom: 15px;
+      }
+
+      .kontrol-grup {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        justify-content: center;
+        gap: 10px; /* Jarak antara slider dan angka */
+      }
+
+      #sliderSuara {
+        flex-grow: 1; /* Slider akan melebar untuk mengisi ruang yang tersedia */
+        cursor: pointer;
+      }
+
+      #angkaSuara {
+        width: 60px;
+        padding: 8px;
+        font-size: 16px;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background-color: #333;
+        color: white;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -45,10 +83,20 @@
       Tekan tombol di atas untuk memulai dan berikan izin akses kamera serta
       mikrofon.
     </div>
+    <div class="kontrol-container">
+      <label for="sliderSuara">Batas kekerasan suara skala 0 - 255</label>
+      <div class="kontrol-grup">
+        <input type="range" id="sliderSuara" min="0" max="255" value="10" />
+        <input type="number" id="angkaSuara" min="0" max="255" value="10" />
+      </div>
+    </div>
 
     <script>
       const tombolMulai = document.getElementById("tombolMulai");
       const teksStatus = document.getElementById("status");
+
+      const sliderSuara = document.getElementById("sliderSuara");
+      const angkaSuara = document.getElementById("angkaSuara");
 
       let sedangBerjalan = false;
       let jalurKamera = null;
@@ -57,7 +105,23 @@
 
       // --- PENYESUAIAN 1: Menurunkan batas ambang batas ---
       // BATAS KEKERASAN SUARA (Skala 0 sampai 255).
-      const BATAS_BASS = 50;
+      // const BATAS_BASS = 50;
+
+      let BATAS_BASS = parseInt(sliderSuara.value); // Nilai awal diambil dari UI
+
+      // Fungsi untuk memperbarui nilai BATAS_BASS secara dinamis
+      function perbaruiSensitivitas() {
+        BATAS_BASS = parseInt(this.value); // Ambil nilai dari kontrol yang diubah
+        sliderSuara.value = this.value; // Sinkronkan slider
+        angkaSuara.value = this.value; // Sinkronkan angka
+
+        // Opsional: Berikan umpan balik visual atau log
+        console.log("Sensitivitas diperbarui ke:", BATAS_BASS);
+      }
+
+      // Hubungkan event listener untuk slider dan input angka
+      sliderSuara.addEventListener("input", perbaruiSensitivitas);
+      angkaSuara.addEventListener("input", perbaruiSensitivitas);
 
       tombolMulai.addEventListener("click", async () => {
         if (!sedangBerjalan) {
